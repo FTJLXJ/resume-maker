@@ -5,67 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>简历生成器</title>
 <style>
-/* ===== Editor Layout ===== */
+/* ===== Editor Layout (Cream Editorial) ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #edf2f7;
+  font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", "PingFang SC", serif;
+  background: #f0ebe0;
   display: flex; height: 100vh; overflow: hidden;
 }
 
 /* Left Panel */
-.left { width: 460px; min-width: 460px; background: #fff; display: flex; flex-direction: column; border-right: 1px solid #e2e8f0; }
-.topbar { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-.topbar h1 { font-size: 18px; color: #1a202c; }
-.topbar .actions { display: flex; gap: 8px; }
-.topbar .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
-.btn-export-html { background: #ebf8ff; color: #2b6cb0; }
-.btn-export-pdf { background: #f0fff4; color: #276749; }
-.btn-reset { background: #fff5f5; color: #c53030; }
+.left { width: 440px; min-width: 440px; background: #faf7f0; display: flex; flex-direction: column; border-right: 1px solid #e0d8c8; }
+.topbar { padding: 20px 24px; border-bottom: 1px solid #e0d8c8; display: flex; justify-content: space-between; align-items: center; }
+.topbar .logo { font-size: 10px; letter-spacing: 5px; color: #b8a080; font-family: -apple-system, "PingFang SC", sans-serif; }
+.topbar h1 { font-size: 18px; letter-spacing: 6px; color: #2c2416; font-weight: 400; }
+.topbar .actions { display: flex; gap: 8px; font-family: -apple-system, "PingFang SC", sans-serif; }
+.topbar .btn { padding: 8px 16px; border: none; cursor: pointer; font-size: 11px; letter-spacing: 1px; }
+.btn-export-html { background: #2c2416; color: #faf7f0; }
+.btn-export-pdf { background: transparent; color: #5c4a2e; border: 1px solid #c8b898; }
+.btn-reset { background: transparent; color: #a08060; border: 1px solid #d0c8b0; }
 
-.tabs { display: flex; border-bottom: 1px solid #e2e8f0; overflow-x: auto; }
-.tab { padding: 10px 16px; font-size: 13px; color: #718096; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; user-select: none; }
-.tab:hover { color: #2d3748; }
-.tab.active { color: #2b6cb0; border-bottom-color: #2b6cb0; font-weight: 600; }
+.tabs { display: flex; border-bottom: 1px solid #e0d8c8; overflow-x: auto; }
+.tab { padding: 10px 18px; font-size: 11px; letter-spacing: 2px; color: #b8a080; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; user-select: none; font-family: -apple-system, "PingFang SC", sans-serif; }
+.tab:hover { color: #5c4a2e; }
+.tab.active { color: #2c2416; border-bottom-color: #b8a080; }
 
-.form-area { flex: 1; overflow-y: auto; padding: 20px; }
-.form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 13px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.form-area { flex: 1; overflow-y: auto; padding: 24px; }
+.form-group { margin-bottom: 18px; }
+.form-group label { display: block; font-size: 10px; letter-spacing: 2px; color: #b8a080; margin-bottom: 5px; font-family: -apple-system, "PingFang SC", sans-serif; text-transform: uppercase; }
 .form-group input, .form-group textarea, .form-group select {
-  width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;
-  font-family: inherit; color: #2d3748; background: #f7fafc; transition: border-color 0.2s;
+  width: 100%; padding: 10px 12px; border: 1px solid #e0d8c8; font-size: 13px;
+  font-family: Georgia, "Noto Serif SC", "PingFang SC", serif; color: #2c2416; background: #fffefb; transition: border-color 0.2s;
 }
-.form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: #2b6cb0; background: #fff; }
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: #b8a080; }
+.form-group input::placeholder, .form-group textarea::placeholder { color: #c8b898; }
 .form-group textarea { resize: vertical; min-height: 60px; }
-.form-row { display: flex; gap: 10px; }
+.form-row { display: flex; gap: 12px; }
 .form-row .form-group { flex: 1; }
 
 .dynamic-list { list-style: none; }
 .dynamic-list li { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
 .dynamic-list li input { flex: 1; }
-.btn-sm { padding: 5px 10px; border-radius: 4px; border: 1px solid #e2e8f0; cursor: pointer; font-size: 12px; background: #fff; color: #4a5568; }
-.btn-sm.danger { color: #e53e3e; border-color: #fed7d7; }
-.btn-sm.add { color: #2b6cb0; border-color: #bee3f8; margin-top: 4px; }
+.btn-sm { padding: 5px 10px; cursor: pointer; font-size: 10px; letter-spacing: 1px; background: #fffefb; color: #5c4a2e; border: 1px solid #e0d8c8; font-family: -apple-system, "PingFang SC", sans-serif; }
+.btn-sm.danger { color: #a06040; border-color: #e0c8b8; }
+.btn-sm.add { color: #5c4a2e; border-color: #c8b898; margin-top: 4px; }
 
-.photo-upload { display: flex; align-items: center; gap: 10px; }
-.photo-preview { width: 64px; height: 64px; border-radius: 50%; border: 2px dashed #cbd5e0; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; background: #f7fafc; flex-shrink: 0; }
+.photo-upload { display: flex; align-items: center; gap: 12px; }
+.photo-preview { width: 72px; height: 96px; border: 1px dashed #d0c8b0; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; background: #fffefb; flex-shrink: 0; }
 .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
-.photo-preview .placeholder { font-size: 11px; color: #a0aec0; text-align: center; line-height: 1.4; }
-.photo-hint { font-size: 12px; color: #a0aec0; }
+.photo-preview .placeholder { font-size: 10px; color: #b8a080; text-align: center; line-height: 1.4; font-family: -apple-system, "PingFang SC", sans-serif; }
+.photo-hint { font-size: 10px; color: #b8a080; font-family: -apple-system, "PingFang SC", sans-serif; }
 .parse-section { padding: 4px 0; }
-.parse-desc { font-size: 13px; color: #718096; margin-bottom: 12px; line-height: 1.6; }
-.btn-parse { padding: 10px 24px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; background: linear-gradient(135deg, #d69e2e, #ed8936); color: #fff; margin-top: 10px; }
-.btn-parse:hover { opacity: 0.9; }
-.parse-log { font-size: 12px; color: #718096; margin-top: 4px; line-height: 1.8; }
-.parse-log .ok { color: #276749; }
-.parse-log .skip { color: #b7791f; }
-.file-drop { border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; margin-bottom: 4px; }
-.file-drop:hover { border-color: #d69e2e; background: #fffff5; }
-.file-drop.dragover { border-color: #d69e2e; background: #fffbeb; }
-.file-drop .status { font-size: 12px; margin-top: 8px; }
+.parse-desc { font-size: 12px; color: #8c7a60; margin-bottom: 14px; line-height: 1.7; font-family: -apple-system, "PingFang SC", sans-serif; }
+.btn-parse { padding: 11px 28px; border: none; cursor: pointer; font-size: 12px; letter-spacing: 3px; background: #2c2416; color: #faf7f0; margin-top: 10px; font-family: -apple-system, "PingFang SC", sans-serif; }
+.btn-parse:hover { background: #5c4a2e; }
+.parse-log { font-size: 11px; color: #8c7a60; margin-top: 4px; line-height: 1.8; font-family: -apple-system, "PingFang SC", sans-serif; }
+.parse-log .ok { color: #5a7a4a; }
+.parse-log .skip { color: #a08060; }
+.file-drop { border: 1px dashed #d0c8b0; padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; margin-bottom: 4px; }
+.file-drop:hover { border-color: #b8a080; background: #fffefb; }
+.file-drop.dragover { border-color: #b8a080; background: #f5f0e5; }
+.file-drop .status { font-size: 11px; margin-top: 8px; font-family: -apple-system, "PingFang SC", sans-serif; }
+
+/* Feedback Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(44,36,22,0.5); z-index: 1000; justify-content: center; align-items: center; }
+.modal-overlay.show { display: flex; }
+.modal-box { background: #fffefb; padding: 32px; max-width: 420px; width: 90%; box-shadow: 0 4px 32px rgba(44,36,22,0.15); }
+.modal-box h3 { font-size: 14px; letter-spacing: 3px; color: #2c2416; margin-bottom: 6px; text-transform: uppercase; }
+.modal-box .modal-sub { font-size: 12px; color: #8c7a60; margin-bottom: 16px; font-family: -apple-system, "PingFang SC", sans-serif; }
+.modal-box textarea { width: 100%; min-height: 100px; padding: 12px; border: 1px solid #e0d8c8; font-size: 13px; font-family: Georgia, "Noto Serif SC", serif; resize: vertical; background: #faf7f0; color: #2c2416; }
+.modal-box textarea:focus { outline: none; border-color: #b8a080; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.btn-submit { padding: 8px 22px; border: none; cursor: pointer; font-size: 11px; letter-spacing: 2px; background: #2c2416; color: #faf7f0; font-family: -apple-system, "PingFang SC", sans-serif; }
+.btn-skip { padding: 8px 22px; border: none; cursor: pointer; font-size: 11px; color: #8c7a60; background: transparent; font-family: -apple-system, "PingFang SC", sans-serif; }
+.modal-thanks { display: none; text-align: center; padding: 20px 0; font-size: 13px; color: #5a7a4a; letter-spacing: 2px; }
 
 /* project card */
-.project-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.project-card { border: 1px solid #e0d8c8; padding: 16px; margin-bottom: 12px; background: #fffefb; }
 .project-card .form-row { margin-bottom: 0; }
 .project-card .form-row .form-group { margin-bottom: 10px; }
 .dynamic-sub-list { list-style: none; margin-top: 4px; }
@@ -73,13 +88,13 @@ body {
 .dynamic-sub-list li input { flex: 1; }
 
 /* Right Panel */
-.right { flex: 1; display: flex; flex-direction: column; background: #e2e8f0; }
-.preview-toolbar { padding: 12px 20px; display: flex; gap: 10px; align-items: center; background: #fff; border-bottom: 1px solid #e2e8f0; }
-.preview-toolbar span { font-size: 13px; color: #4a5568; font-weight: 500; }
-.template-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid #e2e8f0; cursor: pointer; font-size: 12px; background: #fff; color: #4a5568; }
-.template-btn.active { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
-.preview-wrap { flex: 1; overflow-y: auto; padding: 24px; display: flex; justify-content: center; }
-.preview-page { width: 800px; min-height: 1000px; background: #fff; border-radius: 4px; box-shadow: 0 2px 16px rgba(0,0,0,0.1); flex-shrink: 0; }
+.right { flex: 1; display: flex; flex-direction: column; background: #e8e0d0; }
+.preview-toolbar { padding: 14px 24px; display: flex; gap: 12px; align-items: center; background: #faf7f0; border-bottom: 1px solid #e0d8c8; }
+.preview-toolbar span { font-size: 10px; letter-spacing: 3px; color: #b8a080; font-family: -apple-system, "PingFang SC", sans-serif; text-transform: uppercase; }
+.template-btn { padding: 6px 16px; border: 1px solid #d0c8b0; cursor: pointer; font-size: 10px; letter-spacing: 1px; background: transparent; color: #8c7a60; font-family: -apple-system, "PingFang SC", sans-serif; }
+.template-btn.active { background: #2c2416; color: #faf7f0; border-color: #2c2416; }
+.preview-wrap { flex: 1; overflow-y: auto; padding: 28px; display: flex; justify-content: center; }
+.preview-page { width: 800px; min-height: 1000px; background: #fffefb; box-shadow: 0 2px 24px rgba(44,36,22,0.1); flex-shrink: 0; }
 
 /* ===== Resume Templates ===== */
 .resume { font-size: 13.5px; line-height: 1.7; color: #2d3748; padding: 0; }
@@ -87,7 +102,7 @@ body {
 .resume .r-header h2 { font-size: 30px; font-weight: 700; }
 .resume .r-header .subtitle { font-size: 14px; }
 .resume .r-header .contact { text-align: right; font-size: 13px; line-height: 1.8; }
-.resume .r-header .avatar { width: 60px; height: 60px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+.resume .r-header .avatar { width: 75px; height: 100px; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
 .resume .r-header .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .resume .r-body { display: flex; }
 .resume .r-sidebar { width: 220px; padding: 32px 24px; flex-shrink: 0; }
@@ -157,7 +172,7 @@ body {
   .left, .preview-toolbar, .topbar { display: none !important; }
   .right { background: #fff; }
   .preview-wrap { padding: 0; overflow: visible; }
-  .preview-page { box-shadow: none; border-radius: 0; width: 100%; min-height: auto; }
+  .preview-page { box-shadow: none; width: 100%; min-height: auto; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
@@ -171,7 +186,10 @@ if (typeof mammoth === 'undefined') document.write('<script src="https://unpkg.c
 <!-- ===== Left Panel ===== -->
 <div class="left">
   <div class="topbar">
-    <h1>简历生成器</h1>
+    <div>
+      <div class="logo">EST. 2026</div>
+      <h1>RÉSUMÉ</h1>
+    </div>
     <div class="actions">
       <button class="btn btn-export-html" onclick="exportHTML()">导出 HTML</button>
       <button class="btn btn-export-pdf" onclick="exportPDF()">导出 PDF</button>
@@ -592,13 +610,40 @@ function exportHTML() {
   a.download = (data.name || '简历') + '-简历.html';
   a.click();
   URL.revokeObjectURL(url);
+  setTimeout(showFeedback, 300);
 }
 
 function exportPDF() {
   const w = window.open('', '_blank', 'width=900,height=700');
   w.document.write(getResumeHTML());
   w.document.close();
-  setTimeout(() => w.print(), 500);
+  setTimeout(() => { w.print(); showFeedback(); }, 500);
+}
+
+// ===== Feedback Modal =====
+function showFeedback() {
+  document.getElementById('feedbackModal').classList.add('show');
+  document.getElementById('feedbackForm').style.display = 'block';
+  document.getElementById('feedbackThanks').style.display = 'none';
+  document.getElementById('feedbackText').value = '';
+}
+function closeFeedback() {
+  document.getElementById('feedbackModal').classList.remove('show');
+}
+function submitFeedback() {
+  const text = document.getElementById('feedbackText').value.trim();
+  if (text) {
+    const list = JSON.parse(localStorage.getItem('resume_feedback') || '[]');
+    list.push({ text, time: new Date().toISOString() });
+    localStorage.setItem('resume_feedback', JSON.stringify(list));
+    const title = encodeURIComponent('用户反馈：' + text.substring(0, 30) + (text.length > 30 ? '…' : ''));
+    const body = encodeURIComponent('## 反馈内容\n\n' + text + '\n\n---\n自动提交于 ' + new Date().toLocaleString());
+    const url = 'https://github.com/FTJLXJ/resume-maker/issues/new?title=' + title + '&body=' + body + '&labels=feedback';
+    window.open(url, '_blank');
+  }
+  document.getElementById('feedbackForm').style.display = 'none';
+  document.getElementById('feedbackThanks').style.display = 'block';
+  setTimeout(closeFeedback, 1500);
 }
 
 function resetAll() {
@@ -878,5 +923,22 @@ if (data.template) {
   document.querySelectorAll('.template-btn').forEach(b => b.classList.toggle('active', b.dataset.tpl === data.template));
 }
 </script>
+
+<!-- Feedback Modal -->
+<div class="modal-overlay" id="feedbackModal">
+  <div class="modal-box">
+    <div id="feedbackForm">
+      <h3>使用体验反馈</h3>
+      <div class="modal-sub">刚才导出时遇到了什么问题吗？请告诉我们，帮助改进这个工具。</div>
+      <textarea id="feedbackText" placeholder="如：排版错乱、导出失败、操作不方便…"></textarea>
+      <div class="modal-actions">
+        <button class="btn-skip" onclick="closeFeedback()">跳过</button>
+        <button class="btn-submit" onclick="submitFeedback()">提交反馈</button>
+      </div>
+    </div>
+    <div class="modal-thanks" id="feedbackThanks">感谢你的反馈，我们会认真改进！</div>
+  </div>
+</div>
+
 </body>
 </html>
