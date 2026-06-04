@@ -1,0 +1,12 @@
+# AI 设计过程文件
+.superpowers/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+
+# 个人简历源文件（包含隐私信息）
+简历-*.html
+简历-*.md
+简历-*.pdf
+简历-*.docx

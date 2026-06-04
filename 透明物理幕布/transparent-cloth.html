@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>透明物理幕布 · 手势交互</title>
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:#000; font-family:'Segoe UI',system-ui,sans-serif;
+    touch-action:none; -webkit-touch-callout:none;
+    -webkit-user-select:none; user-select:none;
+    position:fixed; top:0; left:0;
+  }
+  canvas { display:block; position:absolute; top:0; left:0; }
+
+  /* Start Overlay */
+  #start-overlay {
+    position:fixed; inset:0; z-index:100;
+    background:rgba(0,0,0,0.88);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:opacity 0.5s;
+  }
+  #start-overlay.hidden { opacity:0; pointer-events:none; }
+  #start-overlay h1 {
+    color:#fff; font-size:clamp(1.6rem,4vw,2.4rem); font-weight:300;
+    letter-spacing:0.08em; margin-bottom:2rem; text-align:center;
+  }
+  #start-btn {
+    padding:14px 56px; font-size:1.1rem; letter-spacing:0.06em;
+    border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.08);
+    color:#fff; cursor:pointer; border-radius:2px;
+    transition:background 0.25s, border-color 0.25s;
+  }
+  #start-btn:hover { background:rgba(255,255,255,0.18); border-color:rgba(255,255,255,0.85); }
+
+  /* UI Controls Container */
+  #ui-panel {
+    position:fixed; z-index:50;
+    transition:opacity 0.4s;
+  }
+  #ui-panel.hidden { opacity:0; pointer-events:none; }
+
+  /* Bottom-right controls */
+  #br-controls {
+    position:fixed; bottom:20px; right:20px; z-index:51;
+    display:flex; flex-direction:column; align-items:flex-end; gap:10px;
+    transition:opacity 0.4s;
+  }
+  #br-controls.hidden { opacity:0; pointer-events:none; }
+
+  .ctrl-row { display:flex; align-items:center; gap:10px; }
+  .ctrl-btn {
+    width:42px; height:42px; border-radius:50%;
+    border:1px solid rgba(255,255,255,0.35); background:rgba(0,0,0,0.45);
+    color:#fff; cursor:pointer; font-size:1.1rem;
+    display:flex; align-items:center; justify-content:center;
+    transition:background 0.2s, border-color 0.2s;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  .ctrl-btn:hover { background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.7); }
+  .ctrl-btn svg { width:20px; height:20px; fill:none; stroke:#fff; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* Zoom slider */
+  #zoom-slider {
+    -webkit-appearance:none; appearance:none;
+    width:100px; height:3px; background:rgba(255,255,255,0.35);
+    border-radius:2px; outline:none; cursor:pointer;
+  }
+  #zoom-slider::-webkit-slider-thumb {
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:#fff; cursor:pointer; border:none;
+  }
+
+  /* Top-right eye toggle */
+  #eye-toggle {
+    position:fixed; top:20px; right:20px; z-index:52;
+    width:40px; height:40px; border-radius:50%;
+    border:1px solid rgba(255,255,255,0.35); background:rgba(0,0,0,0.45);
+    color:#fff; cursor:pointer; font-size:1.1rem;
+    display:flex; align-items:center; justify-content:center;
+    transition:background 0.2s, border-color 0.2s;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  #eye-toggle:hover { background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.7); }
+  #eye-toggle svg { width:20px; height:20px; fill:none; stroke:#fff; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* Hint text when no media */
+  #hint-text {
+    position:fixed; z-index:10; pointer-events:none;
+    color:rgba(255,255,255,0.25); font-size:0.85rem;
+    letter-spacing:0.05em; text-align:center;
+  }
+
+  /* Placeholder rect */
+  #placeholder {
+    position:fixed; z-index:5; pointer-events:none;
+    background:rgba(30,30,30,0.7); border:1px dashed rgba(255,255,255,0.12);
+    border-radius:2px;
+  }
+
+  #status-bar {
+    position:fixed; bottom:10px; left:16px; z-index:55; pointer-events:none;
+    color:rgba(255,255,255,0.55); font-size:0.72rem; letter-spacing:0.03em;
+    font-family:monospace; transition:opacity 0.5s;
+  }
+  #init-status {
+    color:rgba(255,255,255,0.5); font-size:0.8rem; margin-top:0.8rem;
+    letter-spacing:0.04em; min-height:1.2em;
+  }
+  #file-input { display:none; }
+</style>
+</head>
+<body>
+
+<!-- Start Overlay -->
+<div id="start-overlay">
+  <h1>透明物理幕布</h1>
+  <button id="start-btn">START</button>
+  <div id="init-status"></div>
+</div>
+
+<!-- Status indicator (bottom-left) -->
+<div id="status-bar"></div>
+
+<!-- Placeholder when no media -->
+<div id="placeholder"></div>
+<div id="hint-text">上传图片或视频以填充幕布</div>
+
+<!-- Eye toggle -->
+<button id="eye-toggle" title="显示/隐藏 UI">
+  <svg viewBox="0 0 24 24">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+</button>
+
+<!-- Bottom-right controls -->
+<div id="br-controls">
+  <div class="ctrl-row">
+    <button class="ctrl-btn" id="btn-upload" title="上传媒体">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </button>
+    <button class="ctrl-btn" id="btn-flip" title="翻转摄像头">
+      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.5 17.5A9 9 0 0021 12"/><polyline points="23 20 23 14 17 14"/><path d="M20.5 6.5A9 9 0 003 12"/></svg>
+    </button>
+    <input type="range" id="zoom-slider" min="0.5" max="2.5" value="1" step="0.05" title="缩放">
+  </div>
+</div>
+
+<input type="file" id="file-input" accept="image/*,video/*">
+<video id="webcam-video" playsinline autoplay muted></video>
+<video id="media-video" playsinline muted loop></video>
+
+<!-- p5.js 本地加载 -->
+<script src="p5.min.js"></script>
+<script>
+document.dispatchEvent(new Event('p5-ready'));
+</script>
+
+<!-- Main application -->
+<script>
+// Wait for p5.js before initializing
+var _appInitRan = false;
+function runApp() {
+  if (_appInitRan) return;
+  _appInitRan = true;
+  // ============ DOM REFS ============
+const startOverlay = document.getElementById('start-overlay');
+const startBtn = document.getElementById('start-btn');
+const eyeToggle = document.getElementById('eye-toggle');
+const brControls = document.getElementById('br-controls');
+const zoomSlider = document.getElementById('zoom-slider');
+const fileInput = document.getElementById('file-input');
+const hintText = document.getElementById('hint-text');
+const placeholder = document.getElementById('placeholder');
+const webcamVideo = document.getElementById('webcam-video');
+const mediaVideo = document.getElementById('media-video');
+const statusBar = document.getElementById('status-bar');
+const initStatus = document.getElementById('init-status');
+
+// ============ HELPERS ============
+function setStatus(msg) {
+  console.log('[Status]', msg);
+  if (statusBar) statusBar.textContent = msg;
+  if (initStatus) initStatus.textContent = msg;
+}
+
+// ============ GLOBALS ============
+let handLandmarker = null;
+let lastHandResults = null;
+let handsData = [];          // tracked hands across frames: [{id, x, y, pinch, vx, vy}]
+let currentHands = [];       // current frame raw hands
+let pinchActive = false;
+let grabbedParticles = new Set();
+let grabHandIndex = -1;
+let grabOffsetX = 0, grabOffsetY = 0;  // offset from pinch to center of grabbed area
+let flingState = 'idle';     // 'idle' | 'flying' | 'falling'
+let flingTimer = 0;
+let flingTargetY = 0;
+let uiVisible = true;
+let cameraFlipped = false;
+let zoomLevel = 1;
+let started = false;
+let webcamReady = false;
+let currentStream = null;
+
+// Uploaded media
+let uploadedImg = null;
+let uploadedVideo = null;
+let mediaAspect = null;      // width/height of uploaded media
+let hasMedia = false;
+
+// p5 instance ref
+let p5inst = null;
+
+// ============ CLOTH DIMENSIONS (recalculated on resize / media upload) ============
+let clothOX = 0, clothOY = 0;       // top-left origin of cloth
+let clothW = 0, clothH = 0;         // cloth pixel dimensions
+let cellW = 0, cellH = 0;           // grid cell spacing
+let restPerimeter = [];             // original cloth perimeter for media clipping
+let originalParticlePositions = []; // for restore force
+
+// ============ VERLET CLOTH ============
+const COLS = 38;
+const ROWS = 35;
+const FRICTION = 0.97;
+const GRAVITY_MAG = 0.04;
+const CONSTRAINT_ITERS = 30;
+const STIFFNESS = 0.32;
+const PINCH_DOWN = 0.20;
+const PINCH_UP = 0.28;
+const GRAB_RADIUS = 150;
+const GRAB_AREA_RADIUS = 8;     // radius of particles grabbed around pinch point
+const HAND_MATCH_RADIUS = 200;
+const HAND_LOST_GRACE = 5;      // frames to wait before releasing grab on hand loss
+
+// Particle data as flat arrays (faster than objects)
+// particles.x[i], particles.y[i], particles.ox[i], particles.oy[i], particles.pinned[i]
+// offsets[i] = {ox, oy} random offset
+let px, py, pox, poy, pinned, offsets;
+
+function createCloth() {
+  // Reset all interaction state so the new cloth starts fresh
+  flingState = 'idle';
+  flingTimer = 0;
+  mouseGrabParticles.clear();
+  grabbedParticles.clear();
+  pinchActive = false;
+
+  const n = COLS * ROWS;
+  px = new Float32Array(n);
+  py = new Float32Array(n);
+  pox = new Float32Array(n);
+  poy = new Float32Array(n);
+  pinned = new Uint8Array(n);
+  offsets = new Float32Array(n * 2);
+
+  const dropLift = Math.min(200, clothH * 0.55);
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const i = row * COLS + col;
+      const ox = clothOX + col * cellW;
+      const oy = clothOY + row * cellH + (row <= 1 ? 0 : (Math.random() * 16 - 10));
+      const isPinned = (row <= 1);
+      px[i] = pox[i] = ox;
+      py[i] = poy[i] = isPinned ? oy : oy - dropLift;
+      pinned[i] = isPinned ? 1 : 0;
+      offsets[i * 2] = 0;
+      offsets[i * 2 + 1] = (row <= 1 ? 0 : Math.random() * 16 - 10);
+    }
+  }
+
+  // store original positions for restore
+  originalParticlePositions = [];
+  for (let i = 0; i < n; i++) {
+    originalParticlePositions.push({ x: px[i], y: py[i] });
+  }
+
+  // compute rest perimeter
+  updateRestPerimeter();
+}
+
+function updateRestPerimeter() {
+  restPerimeter = [];
+  // top edge
+  for (let col = 0; col < COLS; col++) restPerimeter.push({ x: pox[col], y: poy[col] });
+  // right edge
+  for (let row = 1; row < ROWS; row++) restPerimeter.push({ x: pox[row * COLS + COLS - 1], y: poy[row * COLS + COLS - 1] });
+  // bottom edge (right to left)
+  for (let col = COLS - 2; col >= 0; col--) restPerimeter.push({ x: pox[(ROWS-1) * COLS + col], y: poy[(ROWS-1) * COLS + col] });
+  // left edge (bottom to top)
+  for (let row = ROWS - 2; row >= 1; row--) restPerimeter.push({ x: pox[row * COLS], y: poy[row * COLS] });
+}
+
+function recalcClothDimensions(cw, ch) {
+  const maxW = cw * 0.85;
+  const maxH = ch * 0.55;
+
+  if (hasMedia && mediaAspect) {
+    const maxAspect = maxW / maxH;
+    if (mediaAspect > maxAspect) {
+      clothW = maxW;
+      clothH = maxW / mediaAspect;
+    } else {
+      clothH = maxH;
+      clothW = maxH * mediaAspect;
+    }
+  } else {
+    // default: fill the max area
+    if (maxW / maxH > 16/9) {
+      clothH = maxH;
+      clothW = maxH * (16/9);
+    } else {
+      clothW = maxW;
+      clothH = maxW / (16/9);
+    }
+  }
+
+  clothOX = (cw - clothW) / 2;
+  clothOY = ch * 0.15;
+  cellW = clothW / (COLS - 1);
+  cellH = clothH / (ROWS - 1);
+}
+
+// ============ MEDIAPIPE SETUP ============
+let mediaPipeAvailable = false;
+
+async function initMediaPipe() {
+  try {
+    // Dynamic import from local files (served by Python HTTP server, no CDN)
+    const mp = await import('./mp/vision_bundle.mjs');
+    const vision = await mp.FilesetResolver.forVisionTasks('./mp/wasm/');
+    handLandmarker = await mp.HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numHands: 2,
+      minHandDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    mediaPipeAvailable = true;
+  } catch(e) {
+    console.warn('MediaPipe 本地加载失败:', e.message);
+    mediaPipeAvailable = false;
+  }
+}
+
+// ============ WEBCAM SETUP ============
+async function startWebcam() {
+  if (currentStream) {
+    currentStream.getTracks().forEach(t => t.stop());
+  }
+  const facingMode = cameraFlipped ? 'environment' : 'user';
+  try {
+    currentStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width:{ideal:1280}, height:{ideal:720} },
+      audio: false
+    });
+    webcamVideo.srcObject = currentStream;
+    await webcamVideo.play();
+    webcamReady = true;
+  } catch(e) {
+    console.warn('Webcam unavailable:', e);
+    webcamReady = false;
+  }
+}
+
+async function flipCamera() {
+  cameraFlipped = !cameraFlipped;
+  await startWebcam();
+}
+
+// ============ HAND TRACKING ============
+function processHands() {
+  if (!handLandmarker || !webcamReady || webcamVideo.readyState < 2) return;
+
+  try {
+    const results = handLandmarker.detectForVideo(webcamVideo, performance.now());
+    lastHandResults = results;
+    if (!results || !results.landmarks) { currentHands = []; return; }
+
+    currentHands = results.landmarks.map((lm, idx) => {
+      const thumb = lm[4];
+      const index = lm[8];
+      const wrist = lm[0];
+      const mid = { x: (thumb.x + index.x) / 2, y: (thumb.y + index.y) / 2 };
+      const dist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+
+      // Normalize pinch distance by hand size (wrist to middle finger mcp ~ landmark 9)
+      const handScale = Math.hypot(wrist.x - lm[9].x, wrist.y - lm[9].y) || 0.15;
+      const normalizedDist = dist / handScale;
+
+      // Determine handedness if available
+      let handedness = 'unknown';
+      if (results.handednesses && results.handednesses[idx]) {
+        handedness = results.handednesses[idx][0].categoryName;
+      }
+
+      return {
+        thumb, index, mid,
+        rawDist: dist,
+        pinchDist: normalizedDist,
+        handedness,
+        worldX: mid.x,
+        worldY: mid.y
+      };
+    });
+  } catch(e) {
+    // MediaPipe might throw if not ready yet
+  }
+}
+
+let handLostCount = 0;
+function updateHandTracking() {
+  if (currentHands.length === 0) {
+    // Grace period: don't immediately lose tracking
+    handLostCount++;
+    if (handLostCount >= HAND_LOST_GRACE) {
+      handsData = [];
+    }
+    return;
+  }
+  handLostCount = 0;
+
+  const newTracked = [];
+  const usedPrev = new Set();
+
+  for (const hand of currentHands) {
+    let bestMatch = null;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < handsData.length; i++) {
+      if (usedPrev.has(i)) continue;
+      const prev = handsData[i];
+      // Convert to pixel space for distance check
+      const prevPX = prev.x;
+      const prevPY = prev.y;
+      const curPX = (1 - hand.worldX) * (p5inst ? p5inst.width : window.innerWidth); // mirrored
+      const curPY = hand.worldY * (p5inst ? p5inst.height : window.innerHeight);
+      const d = Math.hypot(curPX - prevPX, curPY - prevPY);
+
+      if (d < HAND_MATCH_RADIUS && d < bestDist) {
+        bestDist = d;
+        bestMatch = i;
+      }
+    }
+
+    const curPX = (1 - hand.worldX) * (p5inst ? p5inst.width : window.innerWidth);
+    const curPY = hand.worldY * (p5inst ? p5inst.height : window.innerHeight);
+
+    if (bestMatch !== null) {
+      usedPrev.add(bestMatch);
+      const prev = handsData[bestMatch];
+      newTracked.push({
+        id: prev.id,
+        x: curPX,
+        y: curPY,
+        pinch: hand.pinchDist,
+        vx: curPX - prev.x,
+        vy: curPY - prev.y,
+        handedness: hand.handedness
+      });
+    } else {
+      newTracked.push({
+        id: Math.random().toString(36).slice(2),
+        x: curPX,
+        y: curPY,
+        pinch: hand.pinchDist,
+        vx: 0, vy: 0,
+        handedness: hand.handedness
+      });
+    }
+  }
+
+  handsData = newTracked;
+}
+
+function checkPinchGesture() {
+  if (handsData.length === 0) {
+    if (pinchActive && grabbedParticles.size > 0) {
+      releaseGrab();
+    }
+    pinchActive = false;
+    grabbedParticles.clear();
+    return;
+  }
+
+  let anyPinching = false;
+
+  for (let hi = 0; hi < handsData.length; hi++) {
+    const hand = handsData[hi];
+    const pinching = hand.pinch < PINCH_DOWN;
+
+    if (pinching && !pinchActive) {
+      // New pinch - grab all particles within radius
+      const grabbed = grabParticlesInRadius(hand.x, hand.y, GRAB_AREA_RADIUS);
+      if (grabbed.length > 0) {
+        pinchActive = true;
+        grabHandIndex = hi;
+        grabbedParticles = new Set(grabbed);
+        flingState = 'idle';
+        anyPinching = true;  // CRITICAL: prevent immediate release
+      }
+    } else if (pinching && pinchActive && hi === grabHandIndex) {
+      // Continuing pinch - move all grabbed particles
+      if (grabbedParticles.size > 0) {
+        // Move grabbed area by hand velocity (simple and direct)
+        var hvx = hand.vx || 0;
+        var hvy = hand.vy || 0;
+        for (const i of grabbedParticles) {
+          pox[i] = px[i];
+          poy[i] = py[i];
+          px[i] += hvx;
+          py[i] += hvy;
+        }
+        anyPinching = true;
+      }
+    } else if (!pinching && pinchActive && hi === grabHandIndex) {
+      // Released - check for fling
+      if (grabbedParticles.size > 0) {
+        releaseGrab(hand);
+      }
+      pinchActive = false;
+      grabbedParticles.clear();
+      grabHandIndex = -1;
+    }
+  }
+
+  // If the pinching hand disappeared
+  if (pinchActive && !anyPinching) {
+    if (grabbedParticles.size > 0) {
+      releaseGrab(null);
+    }
+    pinchActive = false;
+    grabbedParticles.clear();
+    grabHandIndex = -1;
+  }
+}
+
+function grabParticlesInRadius(hx, hy, radius) {
+  const result = [];
+  const r2 = radius * radius;
+  for (let i = 0; i < px.length; i++) {
+    if (pinned[i]) continue;
+    const dx = px[i] - hx;
+    const dy = py[i] - hy;
+    if (dx * dx + dy * dy < r2) {
+      result.push(i);
+    }
+  }
+  return result;
+}
+
+function findClosestParticle(hx, hy, radius) {
+  let best = null;
+  let bestDist = radius * radius;
+  for (let i = 0; i < px.length; i++) {
+    const dx = px[i] - hx;
+    const dy = py[i] - hy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestDist) {
+      bestDist = d2;
+      best = i;
+    }
+  }
+  return best;
+}
+
+function releaseGrab(hand) {
+  if (grabbedParticles.size === 0) return;
+
+  if (hand && hand.vy < -15) {
+    flingState = 'flying';
+    flingTimer = 0;
+    flingTargetY = 85 + (Math.random() - 0.5) * 60;
+  } else if (hand && hand.vy > 15) {
+    flingState = 'falling';
+    flingTimer = 0;
+  } else {
+    flingState = 'idle';
+  }
+
+  grabbedParticles.clear();
+  grabHandIndex = -1;
+}
+
+// ============ MOUSE / TOUCH FALLBACK ============
+let mouseIsDown = false;
+let mouseGrabParticles = new Set();
+let mousePrevX = 0, mousePrevY = 0;
+let mouseVX = 0, mouseVY = 0;
+let mouseGrabOffX = 0, mouseGrabOffY = 0;
+
+function setupMouseTouch(p) {
+  p.mousePressed = () => {
+    if (pinchActive) return;
+    mouseIsDown = true;
+    mousePrevX = p.mouseX;
+    mousePrevY = p.mouseY;
+    mouseVX = 0; mouseVY = 0;
+    const grabbed = grabParticlesInRadius(p.mouseX, p.mouseY, GRAB_AREA_RADIUS);
+    if (grabbed.length > 0) {
+      mouseGrabParticles = new Set(grabbed);
+      let cx = 0, cy = 0;
+      for (const idx of mouseGrabParticles) { cx += px[idx]; cy += py[idx]; }
+      cx /= mouseGrabParticles.size; cy /= mouseGrabParticles.size;
+      mouseGrabOffX = p.mouseX - cx;
+      mouseGrabOffY = p.mouseY - cy;
+      flingState = 'idle';
+    }
+  };
+
+  p.mouseReleased = () => {
+    if (pinchActive) return;
+    mouseIsDown = false;
+    if (mouseGrabParticles.size > 0) {
+      if (mouseVY < -15) {
+        flingState = 'flying';
+        flingTimer = 0;
+        flingTargetY = 85 + (Math.random() - 0.5) * 60;
+      } else if (mouseVY > 15) {
+        flingState = 'falling';
+        flingTimer = 0;
+      }
+    }
+    mouseGrabParticles.clear();
+  };
+
+  p.touchStarted = (e) => {
+    if (pinchActive) return;
+    if (e.touches && e.touches.length === 1) {
+      mouseIsDown = true;
+      mousePrevX = e.touches[0].clientX;
+      mousePrevY = e.touches[0].clientY;
+      mouseVX = 0; mouseVY = 0;
+      const grabbed = grabParticlesInRadius(mousePrevX, mousePrevY, GRAB_AREA_RADIUS);
+      if (grabbed.length > 0) {
+        mouseGrabParticles = new Set(grabbed);
+        let cx = 0, cy = 0;
+        for (const idx of mouseGrabParticles) { cx += px[idx]; cy += py[idx]; }
+        cx /= mouseGrabParticles.size; cy /= mouseGrabParticles.size;
+        mouseGrabOffX = mousePrevX - cx;
+        mouseGrabOffY = mousePrevY - cy;
+        flingState = 'idle';
+      }
+    }
+    return false;
+  };
+
+  p.touchMoved = (e) => {
+    if (pinchActive || !mouseIsDown || mouseGrabParticles.size === 0) return;
+    if (e.touches && e.touches.length === 1) {
+      const cx = e.touches[0].clientX;
+      const cy = e.touches[0].clientY;
+      mouseVX = cx - mousePrevX;
+      mouseVY = cy - mousePrevY;
+      mousePrevX = cx;
+      mousePrevY = cy;
+      for (const i of mouseGrabParticles) {
+        pox[i] = px[i];
+        poy[i] = py[i];
+        px[i] += mouseVX;
+        py[i] += mouseVY;
+      }
+    }
+    return false;
+  };
+
+  p.touchEnded = () => {
+    if (pinchActive) return;
+    mouseIsDown = false;
+    if (mouseGrabParticles.size > 0) {
+      if (mouseVY < -15) {
+        flingState = 'flying';
+        flingTimer = 0;
+        flingTargetY = 85 + (Math.random() - 0.5) * 60;
+      } else if (mouseVY > 15) {
+        flingState = 'falling';
+        flingTimer = 0;
+      }
+    }
+    mouseGrabParticles.clear();
+  };
+}
+
+// ============ PHYSICS UPDATE ============
+function updatePhysics(p) {
+  const n = COLS * ROWS;
+
+  // Track mouse velocity & move grabbed area
+  if (mouseIsDown && mouseGrabParticles.size > 0) {
+    mouseVX = p.mouseX - mousePrevX;
+    mouseVY = p.mouseY - mousePrevY;
+    mousePrevX = p.mouseX;
+    mousePrevY = p.mouseY;
+    for (const i of mouseGrabParticles) {
+      pox[i] = px[i];
+      poy[i] = py[i];
+      px[i] += mouseVX;
+      py[i] += mouseVY;
+    }
+  }
+
+  // Verlet integration
+  for (let i = 0; i < n; i++) {
+    if (pinned[i]) {
+      // Top row always locked
+      continue;
+    }
+    if (pinchActive && grabbedParticles.has(i)) continue; // hand-controlled
+    if (mouseIsDown && mouseGrabParticles.has(i)) continue; // mouse-controlled
+
+    const vx = (px[i] - pox[i]) * FRICTION;
+    const vy = (py[i] - poy[i]) * FRICTION;
+
+    // Perlin noise wind
+    const nx = p.noise(pox[i] * 0.005, poy[i] * 0.005, p.frameCount * 0.008) - 0.5;
+    const ny = p.noise(pox[i] * 0.005 + 100, poy[i] * 0.005 + 100, p.frameCount * 0.008) - 0.5;
+
+    let newX = px[i] + vx + nx * 0.25;
+    let newY = py[i] + vy + GRAVITY_MAG + ny * 0.15;
+
+    // Fling state forces
+    if (flingState === 'flying') {
+      const row = Math.floor(i / COLS);
+      const targetY = flingTargetY + row * cellH * 0.35 + offsets[i * 2 + 1];
+      newY += (targetY - py[i]) * 0.02;
+      newX += (pox[i] + offsets[i * 2] - px[i]) * 0.008;
+    } else if (flingState === 'falling') {
+      const orig = originalParticlePositions[i];
+      newY += (orig.y - py[i]) * 0.0011;
+      newX += (orig.x - px[i]) * 0.0011;
+    }
+
+    pox[i] = px[i];
+    poy[i] = py[i];
+    px[i] = newX;
+    py[i] = newY;
+  }
+
+  // Constraint solving
+  for (let iter = 0; iter < CONSTRAINT_ITERS; iter++) {
+    // Horizontal constraints
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS - 1; col++) {
+        const i1 = row * COLS + col;
+        const i2 = row * COLS + col + 1;
+        const dx = px[i2] - px[i1];
+        const dy = py[i2] - py[i1];
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const diff = (dist - cellW) / dist * STIFFNESS;
+        const offsetX = dx * diff * 0.5;
+        const offsetY = dy * diff * 0.5;
+
+        const m1 = (pinned[i1]) ? 0 : 1;
+        const m2 = (pinned[i2]) ? 0 : 1;
+        // Don't constrain grabbed particles
+        const g1 = (pinchActive && grabbedParticles.has(i1)) || (mouseIsDown && mouseGrabParticles.has(i1)) ? 0 : 1;
+        const g2 = (pinchActive && grabbedParticles.has(i2)) || (mouseIsDown && mouseGrabParticles.has(i2)) ? 0 : 1;
+
+        if (m1 && g1) { px[i1] += offsetX; py[i1] += offsetY; }
+        if (m2 && g2) { px[i2] -= offsetX; py[i2] -= offsetY; }
+      }
+    }
+    // Vertical constraints
+    for (let row = 0; row < ROWS - 1; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const i1 = row * COLS + col;
+        const i2 = (row + 1) * COLS + col;
+        const dx = px[i2] - px[i1];
+        const dy = py[i2] - py[i1];
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const diff = (dist - cellH) / dist * STIFFNESS;
+        const offsetX = dx * diff * 0.5;
+        const offsetY = dy * diff * 0.5;
+
+        const m1 = (pinned[i1]) ? 0 : 1;
+        const m2 = (pinned[i2]) ? 0 : 1;
+        const g1 = (pinchActive && grabbedParticles.has(i1)) || (mouseIsDown && mouseGrabParticles.has(i1)) ? 0 : 1;
+        const g2 = (pinchActive && grabbedParticles.has(i2)) || (mouseIsDown && mouseGrabParticles.has(i2)) ? 0 : 1;
+
+        if (m1 && g1) { px[i1] += offsetX; py[i1] += offsetY; }
+        if (m2 && g2) { px[i2] -= offsetX; py[i2] -= offsetY; }
+      }
+    }
+  }
+
+  // Fling timer
+  if (flingState === 'flying') {
+    flingTimer++;
+    if (flingTimer > 90) {  // ~1.5 sec at 60fps
+      flingState = 'falling';
+      flingTimer = 0;
+    }
+  } else if (flingState === 'falling') {
+    flingTimer++;
+    // Check if cloth is close to rest position
+    let maxDist = 0;
+    for (let i = 0; i < n; i++) {
+      const orig = originalParticlePositions[i];
+      const d = Math.hypot(px[i] - orig.x, py[i] - orig.y);
+      if (d > maxDist) maxDist = d;
+    }
+    if (maxDist < 3 || flingTimer > 180) {
+      flingState = 'idle';
+      flingTimer = 0;
+      // Snap to original positions
+      for (let i = 0; i < n; i++) {
+        const orig = originalParticlePositions[i];
+        if (!pinned[i]) { px[i] = orig.x; py[i] = orig.y; pox[i] = orig.x; poy[i] = orig.y; }
+      }
+    }
+  }
+}
+
+function clampParticles(p) {
+  for (let i = 0; i < px.length; i++) {
+    if (isNaN(px[i])) px[i] = pox[i];
+    if (isNaN(py[i])) py[i] = poy[i];
+    if (isNaN(pox[i])) pox[i] = originalParticlePositions[i]?.x ?? clothOX;
+    if (isNaN(poy[i])) poy[i] = originalParticlePositions[i]?.y ?? clothOY;
+    // Clamp to reasonable bounds
+    px[i] = p.constrain(px[i], -p.width * 2, p.width * 3);
+    py[i] = p.constrain(py[i], -p.height * 2, p.height * 3);
+  }
+}
+
+// ============ RENDERING ============
+function getCurrentPerimeter() {
+  const perim = [];
+  // top edge (left to right)
+  for (let col = 0; col < COLS; col++) perim.push({ x: px[col], y: py[col] });
+  // right edge (top to bottom)
+  for (let row = 1; row < ROWS; row++) perim.push({ x: px[row * COLS + COLS - 1], y: py[row * COLS + COLS - 1] });
+  // bottom edge (right to left)
+  for (let col = COLS - 2; col >= 0; col--) perim.push({ x: px[(ROWS-1) * COLS + col], y: py[(ROWS-1) * COLS + col] });
+  // left edge (bottom to top)
+  for (let row = ROWS - 2; row >= 1; row--) perim.push({ x: px[row * COLS], y: py[row * COLS] });
+  return perim;
+}
+
+function drawPath(ctx, perimeter) {
+  ctx.beginPath();
+  ctx.moveTo(perimeter[0].x, perimeter[0].y);
+  for (let i = 1; i < perimeter.length; i++) {
+    ctx.lineTo(perimeter[i].x, perimeter[i].y);
+  }
+  ctx.closePath();
+}
+
+function quadArea(x1,y1, x2,y2, x3,y3, x4,y4) {
+  const a = (x2-x1)*(y3-y1) - (x3-x1)*(y2-y1);
+  const b = (x3-x1)*(y4-y1) - (x4-x1)*(y3-y1);
+  return Math.abs(a + b) * 0.5;
+}
+
+function drawShading(p) {
+  const ctx = p.drawingContext;
+  const origCellW = cellW;
+  const origCellH = cellH;
+  const origArea = origCellW * origCellH;
+
+  p.noStroke();
+  for (let row = 0; row < ROWS - 1; row++) {
+    for (let col = 0; col < COLS - 1; col++) {
+      const i00 = row * COLS + col;
+      const i10 = row * COLS + col + 1;
+      const i01 = (row + 1) * COLS + col;
+      const i11 = (row + 1) * COLS + col + 1;
+
+      const area = quadArea(
+        px[i00], py[i00], px[i10], py[i10],
+        px[i11], py[i11], px[i01], py[i01]
+      );
+
+      const ratio = area / origArea;
+
+      if (ratio < 0.85) {
+        // Compressed - shadow
+        const alpha = p.constrain((1 - ratio) * 180, 0, 120);
+        p.fill(0, 0, 0, alpha);
+        p.beginShape();
+        p.vertex(px[i00], py[i00]);
+        p.vertex(px[i10], py[i10]);
+        p.vertex(px[i11], py[i11]);
+        p.vertex(px[i01], py[i01]);
+        p.endShape(p.CLOSE);
+      } else if (ratio > 1.2) {
+        // Stretched - highlight
+        const alpha = p.constrain((ratio - 1) * 60, 0, 60);
+        p.fill(255, 255, 255, alpha);
+        p.beginShape();
+        p.vertex(px[i00], py[i00]);
+        p.vertex(px[i10], py[i10]);
+        p.vertex(px[i11], py[i11]);
+        p.vertex(px[i01], py[i01]);
+        p.endShape(p.CLOSE);
+      }
+    }
+  }
+}
+
+function drawClothEdges(p) {
+  const ctx = p.drawingContext;
+  const perim = getCurrentPerimeter();
+
+  // Inner edge - dark
+  ctx.save();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  drawPath(ctx, perim);
+  ctx.stroke();
+  ctx.restore();
+
+  // Outer edge - white glossy
+  ctx.save();
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = 'rgba(255,255,255,0.5)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  drawPath(ctx, perim);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHandDebug(p) {
+  if (!uiVisible) return;
+  for (const hand of handsData) {
+    const pinching = hand.pinch < PINCH_DOWN;
+    p.noFill();
+    p.strokeWeight(2);
+    p.stroke(pinching ? '#ff6b6b' : 'rgba(255,255,255,0.4)');
+    p.circle(hand.x, hand.y, pinching ? 25 : 15);
+    if (pinching) {
+      p.fill(255, 100, 100, 220);
+      p.noStroke();
+      p.circle(hand.x, hand.y, 6);
+    }
+  }
+}
+
+function drawClothGrid(p) {
+  // Optional: draw wireframe for debug
+  if (!uiVisible) return;
+  p.strokeWeight(0.5);
+  p.stroke(255, 255, 255, 15);
+  p.noFill();
+  for (let row = 0; row < ROWS; row++) {
+    p.beginShape();
+    for (let col = 0; col < COLS; col++) {
+      const i = row * COLS + col;
+      p.vertex(px[i], py[i]);
+    }
+    p.endShape();
+  }
+  for (let col = 0; col < COLS; col++) {
+    p.beginShape();
+    for (let row = 0; row < ROWS; row++) {
+      const i = row * COLS + col;
+      p.vertex(px[i], py[i]);
+    }
+    p.endShape();
+  }
+}
+
+// ============ P5 SKETCH ============
+const sketch = (p) => {
+  p.setup = () => {
+    const c = p.createCanvas(p.windowWidth, p.windowHeight);
+    c.position(0, 0);
+    c.style('display', 'block');
+    c.style('z-index', '1');
+    p.pixelDensity(1);
+
+    recalcClothDimensions(p.width, p.height);
+    createCloth();
+    updatePlaceholder();
+
+    setupMouseTouch(p);
+    p5inst = p;
+  };
+
+  p.draw = () => {
+    if (!started) {
+      p.background(0);
+      return;
+    }
+
+    try {
+      p.background(0);
+
+      // Validate video element references (they could be lost on file:// or after navigation)
+      var camOk = webcamVideo && webcamVideo.tagName === 'VIDEO' && webcamReady && webcamVideo.readyState >= 2;
+
+      // Process MediaPipe hands every frame for responsive interaction
+      if (mediaPipeAvailable) {
+        processHands();
+        updateHandTracking();
+        checkPinchGesture();
+      }
+
+      // Update physics
+      updatePhysics(p);
+      clampParticles(p);
+
+      const ctx = p.drawingContext;
+
+      // Shared helper: draw mirrored webcam with digital zoom
+      var _drawWebcamDiag = true;
+      const drawWebcam = function() {
+        if (!camOk) return;
+        // Final sanity check
+        if (!webcamVideo || !(webcamVideo instanceof HTMLVideoElement)) {
+          if (_drawWebcamDiag) {
+            console.warn('drawWebcam: webcamVideo invalid —', typeof webcamVideo,
+              'tagName:', webcamVideo && webcamVideo.tagName,
+              'constructor:', webcamVideo && webcamVideo.constructor && webcamVideo.constructor.name);
+            _drawWebcamDiag = false;
+          }
+          return;
+        }
+        p.push();
+        p.translate(p.width / 2, p.height / 2);
+        p.scale(zoomLevel);
+        p.translate(-p.width / 2, -p.height / 2);
+        p.scale(-1, 1);
+        // Use raw context.drawImage to bypass p5.js wrapper
+        try {
+          p.drawingContext.drawImage(webcamVideo, -p.width, 0, p.width, p.height);
+        } catch(rawErr) {
+          if (_drawWebcamDiag) {
+            console.error('ctx.drawImage also failed:', rawErr.message,
+              '| video.readyState:', webcamVideo.readyState,
+              '| video.videoWidth:', webcamVideo.videoWidth,
+              '| video.paused:', webcamVideo.paused,
+              '| video.srcObject:', !!webcamVideo.srcObject);
+            _drawWebcamDiag = false;
+          }
+        }
+        p.pop();
+      };
+
+      // ---- LAYER 1: Webcam background ----
+      if (camOk) {
+        drawWebcam();
+      } else {
+        // Visible checkerboard fallback (instead of black)
+        var sz = 40;
+        for (var gx = 0; gx < p.width; gx += sz) {
+          for (var gy = 0; gy < p.height; gy += sz) {
+            p.fill(((gx/sz + gy/sz) % 2 === 0) ? '#1a1a2e' : '#16213e');
+            p.noStroke();
+            p.rect(gx, gy, sz, sz);
+          }
+        }
+        p.noFill();
+        p.strokeWeight(2);
+        p.stroke(255, 60, 60, 120);
+        p.rect(4, 4, p.width - 8, p.height - 8);
+      }
+
+      // ---- LAYER 2: Uploaded media fills cloth area (fit inside, no crop) ----
+      if (hasMedia && clothW > 0 && clothH > 0) {
+        if (uploadedImg && uploadedImg.tagName === 'IMG' && uploadedImg.width > 0) {
+          var imgAspect = uploadedImg.width / uploadedImg.height;
+          var clothAspect = clothW / clothH;
+          var dw, dh, dx, dy;
+          if (imgAspect > clothAspect) {
+            // Image wider than cloth - fit by width
+            dw = clothW; dh = clothW / imgAspect;
+            dx = clothOX; dy = clothOY + (clothH - dh) / 2;
+          } else {
+            // Image taller than cloth - fit by height
+            dh = clothH; dw = clothH * imgAspect;
+            dx = clothOX + (clothW - dw) / 2; dy = clothOY;
+          }
+          ctx.drawImage(uploadedImg, dx, dy, dw, dh);
+        } else if (uploadedVideo && uploadedVideo.tagName === 'VIDEO' && uploadedVideo.videoWidth > 0 && uploadedVideo.readyState >= 2) {
+          if (uploadedVideo.paused) {
+            uploadedVideo.play().catch(function() {});
+          }
+          var vAspect = uploadedVideo.videoWidth / uploadedVideo.videoHeight;
+          var clothAspectV = clothW / clothH;
+          var dwV, dhV, dxV, dyV;
+          if (vAspect > clothAspectV) {
+            dwV = clothW; dhV = clothW / vAspect;
+            dxV = clothOX; dyV = clothOY + (clothH - dhV) / 2;
+          } else {
+            dhV = clothH; dwV = clothH * vAspect;
+            dxV = clothOX + (clothW - dwV) / 2; dyV = clothOY;
+          }
+          ctx.drawImage(uploadedVideo, dxV, dyV, dwV, dhV);
+        }
+      }
+
+      // ---- LAYER 3: Webcam clipped to CURRENT cloth shape (optical camouflage) ----
+      if (camOk) {
+        var curPerim = getCurrentPerimeter();
+        if (curPerim.length > 0) {
+          ctx.save();
+          try {
+            drawPath(ctx, curPerim);
+            ctx.clip();
+            drawWebcam();
+          } finally {
+            ctx.restore();
+          }
+        }
+      }
+
+      // ---- SHADING ----
+      drawShading(p);
+
+      // ---- CLOTH EDGES ----
+      drawClothEdges(p);
+
+      // ---- DEBUG ----
+      if (uiVisible) {
+        drawHandDebug(p);
+        // Real-time diagnostic in status bar every 15 frames
+        if (p.frameCount % 15 === 0 && handsData.length > 0) {
+          var h = handsData[0];
+          setStatus('手:(' + h.x.toFixed(0) + ',' + h.y.toFixed(0) + ') pinch:' + h.pinch.toFixed(3) +
+            ' | 幕布:(' + clothOX.toFixed(0) + ',' + clothOY.toFixed(0) + ')-(' +
+            (clothOX+clothW).toFixed(0) + ',' + (clothOY+clothH).toFixed(0) + ')');
+        }
+      }
+    } catch(e) {
+      // Prevent the draw loop from dying silently
+      if (p.frameCount % 60 === 0) {
+        console.error('Draw error:', e.message, e.stack);
+      }
+    }
+  };
+
+  p.windowResized = () => {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+    recalcClothDimensions(p.width, p.height);
+    createCloth();
+    updatePlaceholder();
+  };
+};
+
+// ============ UI HELPERS ============
+function updatePlaceholder() {
+  placeholder.style.left = clothOX + 'px';
+  placeholder.style.top = clothOY + 'px';
+  placeholder.style.width = clothW + 'px';
+  placeholder.style.height = clothH + 'px';
+
+  hintText.style.left = clothOX + 'px';
+  hintText.style.top = (clothOY + clothH / 2 - 10) + 'px';
+  hintText.style.width = clothW + 'px';
+
+  if (hasMedia) {
+    placeholder.style.display = 'none';
+    hintText.style.display = 'none';
+  } else {
+    placeholder.style.display = 'block';
+    hintText.style.display = 'block';
+  }
+}
+
+function handleFileUpload(file) {
+  if (!file) return;
+
+  const url = URL.createObjectURL(file);
+
+  if (file.type.startsWith('image/')) {
+    const img = new Image();
+    img.onload = () => {
+      uploadedImg = img;
+      uploadedVideo = null;
+      mediaVideo.src = '';
+      mediaAspect = img.width / img.height;
+      hasMedia = true;
+
+      if (p5inst) {
+        recalcClothDimensions(p5inst.width, p5inst.height);
+        createCloth();
+        updatePlaceholder();
+        console.log('Image loaded — cloth:', clothW.toFixed(0), 'x', clothH.toFixed(0),
+          'at', clothOX.toFixed(0), ',', clothOY.toFixed(0),
+          '| cells:', cellW.toFixed(1), 'x', cellH.toFixed(1),
+          '| particles:', (COLS*ROWS));
+      }
+      setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); };
+    img.src = url;
+  } else if (file.type.startsWith('video/')) {
+    // Clean up previous video
+    if (uploadedVideo && uploadedVideo !== mediaVideo) {
+      uploadedVideo.pause();
+      uploadedVideo.src = '';
+    }
+    uploadedVideo = null;
+    uploadedImg = null;
+    hasMedia = false;
+
+    mediaVideo.onerror = () => {
+      console.error('视频加载失败，编码可能不受支持');
+      hasMedia = false;
+      uploadedVideo = null;
+      updatePlaceholder();
+    };
+    mediaVideo.onloadedmetadata = () => {
+      uploadedVideo = mediaVideo;
+      uploadedImg = null;
+      mediaAspect = mediaVideo.videoWidth / mediaVideo.videoHeight;
+      hasMedia = true;
+
+      const playPromise = mediaVideo.play();
+      if (playPromise) {
+        playPromise.catch((e) => {
+          console.warn('视频自动播放失败，需用户交互:', e.message);
+          // Retry: many browsers allow play after a user gesture
+          mediaVideo.play().catch(() => {});
+        });
+      }
+      if (p5inst) {
+        recalcClothDimensions(p5inst.width, p5inst.height);
+        createCloth();
+        updatePlaceholder();
+        console.log('Video loaded — cloth:', clothW.toFixed(0), 'x', clothH.toFixed(0),
+          'at', clothOX.toFixed(0), ',', clothOY.toFixed(0),
+          '| cells:', cellW.toFixed(1), 'x', cellH.toFixed(1));
+      }
+    };
+    mediaVideo.src = url;
+    mediaVideo.loop = true;
+    mediaVideo.muted = true;
+    mediaVideo.load();
+  }
+}
+
+// ============ EVENT BINDINGS ============
+startBtn.addEventListener('click', async () => {
+  if (started) return;
+  if (!p5inst) {
+    setStatus('引擎未就绪，请刷新页面');
+    startBtn.textContent = '引擎未就绪，请刷新页面';
+    return;
+  }
+  setStatus('正在启动摄像头...');
+  startBtn.textContent = '启动摄像头...';
+  startBtn.disabled = true;
+
+  // Step 1: Start webcam (essential)
+  try {
+    await startWebcam();
+    setStatus('摄像头已就绪');
+  } catch(e) {
+    setStatus('摄像头启动失败: ' + e.message);
+    startBtn.textContent = '摄像头失败，重试';
+    startBtn.disabled = false;
+    return;
+  }
+
+  // Step 2: Try MediaPipe (optional — mouse/touch fallback always works)
+  setStatus('正在加载手势识别...');
+  startBtn.textContent = '加载手势识别...';
+  try {
+    await initMediaPipe();
+    setStatus('手势识别已就绪');
+  } catch(e) {
+    setStatus('手势识别未加载，可用鼠标/触屏');
+    mediaPipeAvailable = false;
+  }
+
+  // Done
+  started = true;
+  // Diagnostic: verify video elements
+  console.log('DIAG: webcamVideo =',
+    webcamVideo ? ('<video> readyState=' + webcamVideo.readyState + ' paused=' + webcamVideo.paused) : 'NULL');
+  console.log('DIAG: mediaVideo =',
+    mediaVideo ? ('<video> readyState=' + mediaVideo.readyState + ' src=' + (mediaVideo.src || '(none)').substring(0, 50)) : 'NULL');
+  console.log('DIAG: webcamReady =', webcamReady);
+  console.log('DIAG: canvas =', p5inst ? (p5inst.width + 'x' + p5inst.height) : 'NULL');
+  setStatus(mediaPipeAvailable ? '就绪 — 可用手势或鼠标拖拽幕布' : '就绪 — 鼠标/触屏拖拽幕布');
+  startOverlay.classList.add('hidden');
+  updatePlaceholder();
+});
+
+eyeToggle.addEventListener('click', () => {
+  uiVisible = !uiVisible;
+  brControls.classList.toggle('hidden', !uiVisible);
+  eyeToggle.style.opacity = uiVisible ? '1' : '0.4';
+});
+
+document.getElementById('btn-upload').addEventListener('click', () => {
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) {
+    handleFileUpload(e.target.files[0]);
+  }
+});
+
+document.getElementById('btn-flip').addEventListener('click', async () => {
+  await flipCamera();
+});
+
+zoomSlider.addEventListener('input', () => {
+  zoomLevel = parseFloat(zoomSlider.value);
+});
+
+// Drag & drop support
+document.addEventListener('dragover', (e) => { e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileUpload(file);
+});
+
+// ============ START P5 ============
+try {
+  if (typeof p5 === 'undefined') throw new Error('p5.js 未能加载');
+  new p5(sketch);
+  setStatus('画布引擎就绪，点击 START 开始');
+} catch(e) {
+  console.error('p5.js 初始化失败:', e.message);
+  setStatus('核心库加载失败: ' + e.message);
+  startBtn.textContent = '核心库加载失败，请刷新重试';
+  startBtn.disabled = false;
+  startBtn.style.color = '#ff6b6b';
+  startBtn.style.borderColor = '#ff6b6b';
+}
+
+// ============ INITIAL PLACEHOLDER POSITION ============
+recalcClothDimensions(window.innerWidth, window.innerHeight);
+updatePlaceholder();
+
+console.log('透明物理幕布已就绪 — 点击 START 开始（手势识别需等 START 后动态加载）');
+} // end runApp
+
+// Wait for p5.js to load, then init
+if (typeof p5 !== 'undefined') {
+  runApp();
+} else {
+  document.addEventListener('p5-ready', runApp);
+}
+</script>
+</body>
+</html>
